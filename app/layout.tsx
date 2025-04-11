@@ -15,6 +15,16 @@ export const metadata: Metadata = {
   title: "MotoWorld",
   description: "Изследвайте света на две колела",
   generator: "v0.dev",
+  icons: {
+    icon: [
+      {
+        url: "/placeholder-logo.png",
+        type: "image/png",
+      }
+    ],
+    shortcut: "/placeholder-logo.png",
+    apple: "/placeholder-logo.png",
+  },
 }
 
 export default function RootLayout({
