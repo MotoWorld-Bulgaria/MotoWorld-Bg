@@ -41,7 +41,7 @@ export default function StripePaymentModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[550px] p-0 bg-white max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[550px] p-0 bg-white max-h-[80vh] overflow-y-auto">
         <DialogHeader className="p-6 pb-2 sticky top-0 bg-white z-10 border-b">
           <DialogTitle className="flex items-center">
             <CreditCard className="mr-2 h-5 w-5" />
