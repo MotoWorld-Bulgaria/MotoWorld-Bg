@@ -82,6 +82,7 @@ export default function MotorcycleCard({ motorcycle }: MotorcycleCardProps) {
         maxSpeed: motorcycle.maxSpeed,
         torque: motorcycle.torque,
       }
+      
 
       await addToGarage(cartItem)
       setShowPopup(true)
