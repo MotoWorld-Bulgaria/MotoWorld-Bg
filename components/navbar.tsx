@@ -124,18 +124,22 @@ export default function Navbar() {
           >
             <div className="relative w-6 h-4">
               <span
-                className={`absolute left-0 h-0.5 rounded-full bg-white transition-all duration-300 ease-out ${
-                  isMenuOpen ? "w-6 top-1.5 rotate-45" : "w-6 top-0 rotate-0"
+                className={`absolute left-0 top-0 h-0.5 rounded-full bg-white transition-all duration-300 ease-out origin-center ${
+                  isMenuOpen 
+                    ? "w-6 translate-y-[7px] rotate-45" 
+                    : "w-6 translate-y-0 rotate-0"
                 }`}
               />
               <span
-                className={`absolute left-0 h-0.5 bg-white rounded-full transition-all duration-300 ease-out ${
-                  isMenuOpen ? "w-0 opacity-0 top-1.5" : "w-6 opacity-100 top-1.5"
+                className={`absolute left-0 top-[7px] h-0.5 bg-white rounded-full transition-all duration-300 ease-out ${
+                  isMenuOpen ? "w-0 opacity-0" : "w-6 opacity-100"
                 }`}
               />
               <span
-                className={`absolute left-0 h-0.5 rounded-full bg-white transition-all duration-300 ease-out ${
-                  isMenuOpen ? "w-6 top-1.5 -rotate-45" : "w-6 top-3 rotate-0"
+                className={`absolute left-0 top-[14px] h-0.5 rounded-full bg-white transition-all duration-300 ease-out origin-center ${
+                  isMenuOpen 
+                    ? "w-6 translate-y-[-7px] -rotate-45" 
+                    : "w-6 translate-y-0 rotate-0"
                 }`}
               />
             </div>
