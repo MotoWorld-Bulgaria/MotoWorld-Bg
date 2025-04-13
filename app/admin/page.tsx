@@ -394,39 +394,7 @@ function OrdersManagement() {
     }
   }
 
-  const handleSendPaymentReminder = async (order: Order) => {
-    if (!order.id || !order.customer?.email) return
-
-    try {
-      const response = await fetch("/api/send-payment-reminder", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          orderId: order.id,
-          email: order.customer.email,
-          orderNumber: order.orderNumber,
-        }),
-      })
-
-      if (response.ok) {
-        toast({
-          title: "Напомняне изпратено",
-          description: `Напомняне за плащане беше изпратено на ${order.customer.email}.`,
-        })
-      } else {
-        throw new Error("Failed to send reminder")
-      }
-    } catch (error) {
-      console.error("Error sending payment reminder:", error)
-      toast({
-        title: "Грешка",
-        description: "Възникна проблем при изпращането на напомняне за плащане.",
-        variant: "destructive",
-      })
-    }
-  }
+  // Payment reminder functionality removed
 
   const handleCreatePaymentLink = async (order: Order) => {
     if (!order.id) return

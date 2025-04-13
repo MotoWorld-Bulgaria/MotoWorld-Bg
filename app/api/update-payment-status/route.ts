@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server"
 import { adminDb } from "@/lib/firebase-admin"
 import { verifyAuthToken } from "@/lib/verify-auth"
-import { sendOrderConfirmationEmail } from "@/lib/email-service"
 import Stripe from "stripe"
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  apiVersion: "2023-10-16",
+  apiVersion: "2025-03-31.basil",
 })
 
 export async function POST(request: Request) {
@@ -61,22 +60,6 @@ export async function POST(request: Request) {
       }
 
       await orderRef.update(updateData)
-
-      // Send order confirmation email
-      try {
-        if (orderData.customer?.email) {
-          await sendOrderConfirmationEmail(orderData.customer.email, {
-            orderNumber: orderData.orderNumber || orderId.substring(0, 8),
-            customerName: `${orderData.customer.firstName || ""} ${orderData.customer.lastName || ""}`.trim(),
-            orderTotal: orderData.totalAmount,
-            paymentMethod: "card",
-            orderDate: new Date().toISOString(),
-          })
-        }
-      } catch (emailError) {
-        console.error("Error sending confirmation email:", emailError)
-        // Continue processing even if email fails
-      }
 
       return NextResponse.json({
         success: true,

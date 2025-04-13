@@ -128,8 +128,9 @@ export default function OrdersPage() {
               // Update order with payment information
               if (paymentData.status) {
                 order.paymentDetails = {
+                  method: "stripe",
                   ...order.paymentDetails,
-                  status: paymentData.status,
+                  status: paymentData.status as "pending" | "processing" | "completed" | "failed" | "refunded",
                   paymentDate: paymentData.created,
                   amount: paymentData.amount_total ? paymentData.amount_total / 100 : order.totalAmount,
                   currency: paymentData.currency || "bgn",
@@ -329,7 +330,7 @@ export default function OrdersPage() {
 
     try {
       await updateDoc(doc(db, "orders", selectedOrder.id), {
-        status: editFormData.status,
+        status: editFormData.status as "pending" | "processing" | "completed" | "cancelled" | "shipped" | "delivered",
         trackingNumber: editFormData.trackingNumber,
         notes: editFormData.notes,
         estimatedDeliveryDate: editFormData.estimatedDeliveryDate
@@ -344,7 +345,7 @@ export default function OrdersPage() {
           order.id === selectedOrder.id
             ? {
                 ...order,
-                status: editFormData.status,
+                status: editFormData.status as "pending" | "processing" | "completed" | "cancelled" | "shipped" | "delivered",
                 trackingNumber: editFormData.trackingNumber,
                 notes: editFormData.notes,
                 estimatedDeliveryDate: editFormData.estimatedDeliveryDate
@@ -395,39 +396,7 @@ export default function OrdersPage() {
     }
   }
 
-  const handleSendPaymentReminder = async (order: Order) => {
-    if (!order.id || !order.customer?.email) return
-
-    try {
-      const response = await fetch("/api/send-payment-reminder", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          orderId: order.id,
-          email: order.customer.email,
-          orderNumber: order.orderNumber,
-        }),
-      })
-
-      if (response.ok) {
-        toast({
-          title: "Напомняне изпратено",
-          description: `Напомняне за плащане беше изпратено на ${order.customer.email}.`,
-        })
-      } else {
-        throw new Error("Failed to send reminder")
-      }
-    } catch (error) {
-      console.error("Error sending payment reminder:", error)
-      toast({
-        title: "Грешка",
-        description: "Възникна проблем при изпращането на напомняне за плащане.",
-        variant: "destructive",
-      })
-    }
-  }
+  // Payment reminder functionality removed
 
   const handleCreatePaymentLink = async (order: Order) => {
     if (!order.id) return
@@ -679,10 +648,6 @@ export default function OrdersPage() {
                                       <DropdownMenuSeparator />
                                       {order.paymentDetails?.status !== "completed" && (
                                         <>
-                                          <DropdownMenuItem onClick={() => handleSendPaymentReminder(order)}>
-                                            <Send className="mr-2 h-4 w-4" />
-                                            Изпрати напомняне
-                                          </DropdownMenuItem>
                                           <DropdownMenuItem onClick={() => handleCreatePaymentLink(order)}>
                                             <CreditCard className="mr-2 h-4 w-4" />
                                             Създай линк за плащане
@@ -854,15 +819,13 @@ export default function OrdersPage() {
                           </td>
                           <td className="py-2 px-4 text-center">{item.quantity}</td>
                           <td className="py-2 px-4 text-right">
-                            {typeof item.price === "number" ? item.price.toFixed(2) : item.price} лв.
+                            {(typeof item.price === "string" ? Number.parseFloat(item.price) : item.price).toFixed(2)} лв.
                           </td>
                           <td className="py-2 px-4 text-right font-medium">
-                            {typeof item.totalPrice === "number"
-                              ? item.totalPrice.toFixed(2)
-                              : (typeof item.price === "number"
-                                  ? (item.price * item.quantity).toFixed(2)
-                                  : Number.parseFloat(item.price as string) * item.quantity
-                                ).toFixed(2)}{" "}
+                            {(item.totalPrice !== undefined ? 
+                              item.totalPrice : 
+                              (typeof item.price === "string" ? Number.parseFloat(item.price) : item.price) * item.quantity
+                            ).toFixed(2)}{" "}
                             лв.
                           </td>
                         </tr>
@@ -885,7 +848,7 @@ export default function OrdersPage() {
                             : "Безплатно"}
                         </td>
                       </tr>
-                      {selectedOrder.taxAmount > 0 && (
+                      {selectedOrder.taxAmount !== undefined && selectedOrder.taxAmount > 0 && (
                         <tr className="bg-gray-100">
                           <td colSpan={3} className="py-2 px-4 text-right font-medium">
                             ДДС:

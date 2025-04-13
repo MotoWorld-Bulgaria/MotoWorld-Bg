@@ -1,11 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { Stripe } from "stripe"
 import { adminDb } from "@/lib/firebase-admin"
-import { sendOrderConfirmationEmail } from "@/lib/email-service"
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  apiVersion: "2023-10-16",
+  apiVersion: "2025-03-31.basil",
 })
 
 // Maximum number of retries for database operations
@@ -85,22 +84,6 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
           "paymentDetails.paymentDate": new Date().toISOString(),
         })
 
-        // Send order confirmation email
-        try {
-          if (orderData?.customer?.email) {
-            await sendOrderConfirmationEmail(orderData.customer.email, {
-              orderNumber: orderData.orderNumber || orderId.substring(0, 8),
-              customerName: `${orderData.customer.firstName || ""} ${orderData.customer.lastName || ""}`.trim(),
-              orderTotal: orderData.totalAmount,
-              paymentMethod: "card",
-              orderDate: new Date().toISOString(),
-            })
-          }
-        } catch (emailError) {
-          console.error("Error sending confirmation email:", emailError)
-          // Continue processing even if email fails
-        }
-
         // Update inventory for each item
         if (orderData?.items && Array.isArray(orderData.items)) {
           for (const item of orderData.items) {
@@ -110,6 +93,10 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
 
               if (productDoc.exists) {
                 const productData = productDoc.data()
+                if (!productData) {
+                  console.error(`No data found for product ${item.id}`)
+                  continue
+                }
                 const currentInventory = productData.inventory || 10
                 const newInventory = Math.max(0, currentInventory - item.quantity)
 

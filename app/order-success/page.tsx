@@ -251,7 +251,7 @@ export default function OrderSuccessPage() {
             </div>
             <h1 className="text-3xl font-bold mb-4">Благодарим за поръчката!</h1>
             <p className="text-gray-600 mb-6">
-              Вашата поръчка беше успешно обработена. Изпратихме потвърждение на имейла ви.
+              Вашата поръчка беше успешно обработена.
             </p>
             <div className="text-xl font-semibold mb-2">
               Номер на поръчка: <span className="text-black">{order.orderNumber}</span>
