@@ -246,6 +246,14 @@ export default function Navbar() {
                             <i className="fas fa-user-circle w-6 text-white/60" />
                             <span className="text-white/90">Акаунт</span>
                           </Link>
+                          <Link
+                            href="/cart"
+                            onClick={closeMenu}
+                            className="flex items-center gap-4 p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-all duration-300"
+                          >
+                            <i className="fas fa-warehouse w-6 text-white/60" />
+                            <span className="text-white/90">Гараж</span>
+                          </Link>
                           <button
                             onClick={handleLogout}
                             className="w-full flex items-center gap-4 p-4 rounded-xl text-red-400 hover:bg-red-500/10 transition-all duration-300"
