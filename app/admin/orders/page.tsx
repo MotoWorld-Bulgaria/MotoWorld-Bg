@@ -128,13 +128,12 @@ export default function OrdersPage() {
               // Update order with payment information
               if (paymentData.status) {
                 order.paymentDetails = {
-                  method: "stripe",
-                  ...order.paymentDetails,
-                  status: paymentData.status as "pending" | "processing" | "completed" | "failed" | "refunded",
+                  ...(order.paymentDetails || {}),
+                  status: paymentData.status,
                   paymentDate: paymentData.created,
                   amount: paymentData.amount_total ? paymentData.amount_total / 100 : order.totalAmount,
                   currency: paymentData.currency || "bgn",
-                  paymentMethod: paymentData.payment_method_types?.[0] || "card",
+                  method: paymentData.payment_method_types?.[0] || "stripe"
                 }
               }
             }

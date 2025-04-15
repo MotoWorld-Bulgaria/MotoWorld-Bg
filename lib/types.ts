@@ -74,8 +74,8 @@ export interface PaymentDetails {
   status: "pending" | "processing" | "completed" | "failed" | "refunded"
   amount: number
   currency: string
-  paymentDate?: any
   paymentMethod?: string
+  paymentDate?: any
 }
 
 export interface Order {
@@ -84,13 +84,13 @@ export interface Order {
   status: "pending" | "processing" | "completed" | "cancelled" | "shipped" | "delivered"
   orderDate?: any
   createdAt?: any
-  customer?: {
+  customer: {
     uid: string
     email: string
     displayName?: string
-    firstName?: string
-    lastName?: string
-    phone?: string
+    firstName: string
+    lastName: string
+    phone: string
   }
   items?: OrderItem[]
   productDetails?: {
@@ -100,7 +100,7 @@ export interface Order {
     image?: string
   }
   shippingDetails?: ShippingDetails & {
-    method?: string
+    method: string
   }
   shippingMethod?: string
   shippingCost: number

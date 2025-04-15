@@ -126,13 +126,12 @@ function OrdersManagement() {
               // Update order with payment information
               if (paymentData.status) {
                 order.paymentDetails = {
-                  ...order.paymentDetails,
+                  ...(order.paymentDetails || {}),
                   status: paymentData.status,
                   paymentDate: paymentData.created,
                   amount: paymentData.amount_total ? paymentData.amount_total / 100 : order.totalAmount,
                   currency: paymentData.currency || "bgn",
-                  method: "stripe", // Setting a default value since this is Stripe payment data
-                  paymentMethod: paymentData.payment_method_types?.[0] || "card",
+                  method: "stripe" as const // Set as literal type
                 }
               }
             }
@@ -181,8 +180,7 @@ function OrdersManagement() {
         (order) =>
           order.customer?.email?.toLowerCase().includes(term) ||
           order.customer?.displayName?.toLowerCase().includes(term) ||
-          order.customer?.firstName?.toLowerCase().includes(term) ||
-          order.customer?.lastName?.toLowerCase().includes(term) ||
+          (order.shippingDetails?.firstName + ' ' + order.shippingDetails?.lastName)?.toLowerCase().includes(term) ||
           order.productDetails?.name?.toLowerCase().includes(term) ||
           order.orderNumber?.toLowerCase().includes(term) ||
           order.id.toLowerCase().includes(term),
@@ -240,8 +238,8 @@ function OrdersManagement() {
         valueA = a.totalAmount || 0
         valueB = b.totalAmount || 0
       } else if (sortField === "customer") {
-        valueA = `${a.customer?.firstName || ""} ${a.customer?.lastName || ""}`.toLowerCase()
-        valueB = `${b.customer?.firstName || ""} ${b.customer?.lastName || ""}`.toLowerCase()
+        valueA = a.customer?.displayName?.toLowerCase() || a.customer?.email?.toLowerCase() || ""
+        valueB = b.customer?.displayName?.toLowerCase() || b.customer?.email?.toLowerCase() || ""
       } else if (sortField === "status") {
         valueA = a.status || ""
         valueB = b.status || ""
@@ -585,9 +583,7 @@ function OrdersManagement() {
                                 </TableCell>
                                 <TableCell>
                                   <div className="flex flex-col">
-                                    <span>
-                                      {order.customer?.firstName} {order.customer?.lastName}
-                                    </span>
+                                    <span>{order.customer?.displayName || 'N/A'}</span>
                                     <span className="text-xs text-gray-500">{order.customer?.email}</span>
                                   </div>
                                 </TableCell>
@@ -651,7 +647,7 @@ function OrdersManagement() {
                                   <div className="text-xs text-gray-500">{formatDate(order.createdAt)}</div>
                                 </div>
                                 <div className="text-xs mt-0.5 text-gray-600">
-                                  {order.customer?.firstName} {order.customer?.lastName}
+                                  {order.customer?.displayName || order.customer?.email}
                                 </div>
                                 <div className="flex items-center justify-between mt-1">
                                   <Badge className={`${getStatusColor(order.status)} text-[10px] h-5 px-1`}>
@@ -726,13 +722,11 @@ function OrdersManagement() {
                   <div className="bg-gray-50 p-3 rounded-md text-sm">
                     <div className="grid grid-cols-2 gap-2">
                       <div className="text-gray-600">Име:</div>
-                      <div>
-                        {selectedOrder.customer?.firstName} {selectedOrder.customer?.lastName}
-                      </div>
+                      <div>{selectedOrder.customer?.displayName || 'N/A'}</div>
                       <div className="text-gray-600">Имейл:</div>
                       <div className="break-all">{selectedOrder.customer?.email}</div>
                       <div className="text-gray-600">Телефон:</div>
-                      <div>{selectedOrder.customer?.phone}</div>
+                      <div>{selectedOrder.shippingDetails?.phone || 'N/A'}</div>
                     </div>
                   </div>
                 </div>
@@ -752,7 +746,7 @@ function OrdersManagement() {
                       <p>{selectedOrder.shippingDetails?.country}</p>
                       <div className="pt-2 grid grid-cols-2 gap-2">
                         <div className="text-gray-600">Метод:</div>
-                        <div>{selectedOrder.shippingDetails?.method}</div>
+                        <div>{selectedOrder.shippingMethod || 'N/A'}</div>
                         {selectedOrder.trackingNumber && (
                           <>
                             <div className="text-gray-600">Tracking:</div>
@@ -801,12 +795,7 @@ function OrdersManagement() {
                           <div className="mt-1 flex justify-between">
                             <span>{item.quantity} бр.</span>
                             <span className="font-medium">
-                              {typeof item.totalPrice === "number"
-                                ? item.totalPrice.toFixed(2)
-                                : typeof item.price === "number"
-                                  ? (item.price * item.quantity).toFixed(2)
-                                  : (Number.parseFloat(item.price as string) * item.quantity).toFixed(2)}{" "}
-                              лв.
+                              {(typeof item.price === "number" ? item.price * item.quantity : (parseFloat(item.price) || 0) * item.quantity).toFixed(2)} лв.
                             </span>
                           </div>
                         </div>

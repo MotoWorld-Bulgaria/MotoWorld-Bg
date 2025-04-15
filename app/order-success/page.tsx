@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { collection, doc, getDoc, getDocs, limit, onSnapshot, query, where } from "firebase/firestore"
+import { collection, doc, getDoc, onSnapshot, getDocs, query, where, limit } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import Navbar from "@/components/navbar"
 import {
@@ -23,14 +23,13 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import Link from "next/link"
 import type { Order } from "@/lib/types"
 import { formatDate } from "@/lib/utils"
-import { getAuth } from "firebase/auth"
 
 export default function OrderSuccessPage() {
   const { user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const sessionId = searchParams.get("session_id")
   const orderId = searchParams.get("order_id")
-  const paymentIntentId = searchParams.get("payment_intent")
 
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
@@ -49,27 +48,25 @@ export default function OrderSuccessPage() {
       try {
         setLoading(true)
 
-        // If we have an order ID, fetch it directly
-        if (orderId) {
-          const orderDoc = await getDoc(doc(db, "orders", orderId))
+        // If we have a session ID, find the order by session ID
+        if (sessionId) {
+          const ordersRef = collection(db, "orders")
+          const snapshot = await getDocs(query(ordersRef, where("checkoutSessionId", "==", sessionId), limit(1)))
 
-          if (orderDoc.exists()) {
-            const orderData = { id: orderDoc.id, ...orderDoc.data() } as Order
+          if (!snapshot.empty) {
+            const orderData = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Order
             setOrder(orderData)
             setPaymentStatus(orderData.paymentDetails?.status || null)
           } else {
             setError("Order not found")
           }
         }
-        // If we have a payment intent ID, find the order by payment intent
-        else if (paymentIntentId) {
-          const ordersRef = collection(db, "orders")
-          const snapshot = await getDocs(
-            query(ordersRef, where("paymentDetails.transactionId", "==", paymentIntentId), limit(1)),
-          )
+        // If we have an order ID, fetch it directly
+        else if (orderId) {
+          const orderDoc = await getDoc(doc(db, "orders", orderId))
 
-          if (!snapshot.empty) {
-            const orderData = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Order
+          if (orderDoc.exists()) {
+            const orderData = { id: orderDoc.id, ...orderDoc.data() } as Order
             setOrder(orderData)
             setPaymentStatus(orderData.paymentDetails?.status || null)
           } else {
@@ -87,7 +84,7 @@ export default function OrderSuccessPage() {
     }
 
     fetchOrder()
-  }, [user, orderId, paymentIntentId, router])
+  }, [user, sessionId, orderId, router])
 
   // Set up real-time listener for order updates
   useEffect(() => {
@@ -116,29 +113,12 @@ export default function OrderSuccessPage() {
 
     const pollPaymentStatus = async () => {
       try {
-        const auth = getAuth()
-        const user = auth.currentUser
-
-        if (!user) return
-
-        const idToken = await user.getIdToken()
-
         // Check payment status via API
-        const response = await fetch(`/api/update-payment-status`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${idToken}`,
-          },
-          body: JSON.stringify({
-            paymentIntentId: order.paymentDetails?.transactionId,
-            orderId: order.id,
-          }),
-        })
-
+        const response = await fetch(`/api/get-payment-status?sessionId=${order.checkoutSessionId}`)
         if (response.ok) {
           const data = await response.json()
-          if (data.status === "completed") {
+
+          if (data.status === "paid") {
             setPaymentStatus("completed")
           }
         }
@@ -251,7 +231,7 @@ export default function OrderSuccessPage() {
             </div>
             <h1 className="text-3xl font-bold mb-4">Благодарим за поръчката!</h1>
             <p className="text-gray-600 mb-6">
-              Вашата поръчка беше успешно обработена.
+              Вашата поръчка беше успешно обработена. Изпратихме потвърждение на имейла ви.
             </p>
             <div className="text-xl font-semibold mb-2">
               Номер на поръчка: <span className="text-black">{order.orderNumber}</span>
@@ -297,9 +277,12 @@ export default function OrderSuccessPage() {
                           {typeof item.price === "number" ? item.price.toFixed(2) : item.price} лв.
                         </td>
                         <td className="px-4 py-4 text-right font-medium">
-                          {typeof item.price === "number"
-                            ? (item.price * item.quantity).toFixed(2)
-                            : (Number.parseFloat(item.price) * item.quantity).toFixed(2)}{" "}
+                          {typeof item.totalPrice === "number"
+                            ? item.totalPrice.toFixed(2)
+                            : (typeof item.price === "number"
+                                ? (item.price * item.quantity).toFixed(2)
+                                : (parseFloat(item.price as string) * item.quantity).toFixed(2)
+                              )}{" "}
                           лв.
                         </td>
                       </tr>
@@ -320,12 +303,12 @@ export default function OrderSuccessPage() {
                         {order.shippingCost > 0 ? `${order.shippingCost.toFixed(2)} лв.` : "Безплатно"}
                       </td>
                     </tr>
-                    {order.taxAmount != null && order.taxAmount > 0 && (
+                    {order.taxAmount !== undefined && order.taxAmount > 0 && (
                       <tr>
                         <td colSpan={3} className="px-4 py-3 text-right font-medium">
                           ДДС:
                         </td>
-                        <td className="px-4 py-3 text-right font-medium">{order.taxAmount.toFixed(2)} лв.</td>
+                        <td className="px-4 py-3 text-right font-medium">{order.taxAmount?.toFixed(2)} лв.</td>
                       </tr>
                     )}
                     <tr className="bg-gray-100">
@@ -349,7 +332,7 @@ export default function OrderSuccessPage() {
               </h3>
               <div className="space-y-2">
                 <p className="font-medium">
-                  {order.shippingDetails?.firstName} {order.shippingDetails?.lastName}
+                  {order.customer?.firstName} {order.customer?.lastName}
                 </p>
                 <p>{order.shippingDetails?.address}</p>
                 <p>
@@ -357,7 +340,7 @@ export default function OrderSuccessPage() {
                 </p>
                 <p>{order.shippingDetails?.country}</p>
                 <p className="mt-4 text-gray-600">
-                  <span className="font-medium">Метод на доставка:</span> {order.shippingMethod}
+                  <span className="font-medium">Метод на доставка:</span> {order.shippingDetails?.method}
                 </p>
                 {order.trackingNumber && (
                   <p className="text-gray-600">
@@ -404,7 +387,7 @@ export default function OrderSuccessPage() {
                   <span className="font-medium">Имейл:</span> {order.customer?.email}
                 </p>
                 <p>
-                  <span className="font-medium">Телефон:</span> {order.shippingDetails?.phone}
+                  <span className="font-medium">Телефон:</span> {order.customer?.phone}
                 </p>
               </div>
             </div>
