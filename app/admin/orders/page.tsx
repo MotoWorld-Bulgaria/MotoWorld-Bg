@@ -672,7 +672,7 @@ export default function OrdersPage() {
                     )}
                   </>
                 )}
-              </CardContent> 
+              </CardContent>
               <CardFooter className="flex justify-between">
                 <div className="text-sm text-muted-foreground">
                   Показани {filteredOrders.length} от {orders.length} поръчки
