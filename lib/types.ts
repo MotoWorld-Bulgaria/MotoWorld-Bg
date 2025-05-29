@@ -117,4 +117,9 @@ export interface Order {
   subtotal: number
   totalAmount: number
   taxAmount?: number
+  discountAmount?: number
+  promoCode?: {
+    code: string
+    discount: number
+  }
 }

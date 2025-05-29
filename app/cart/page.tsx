@@ -176,6 +176,13 @@ export default function CartPage() {
       return
     }
 
+    // Persist promo code data for checkout process
+    if (appliedPromoCode) {
+      localStorage.setItem("appliedPromoCode", JSON.stringify(appliedPromoCode))
+    } else {
+      localStorage.removeItem("appliedPromoCode")
+    }
+
     router.push("/checkout")
   }
 

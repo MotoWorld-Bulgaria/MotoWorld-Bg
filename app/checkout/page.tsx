@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { CreditCard, Truck, MapPin, User, ShoppingBag, CheckCircle2, AlertCircle, ArrowLeft } from "lucide-react"
+import { CreditCard, Truck, MapPin, User, ShoppingBag, CheckCircle2, AlertCircle, ArrowLeft, Tag } from "lucide-react"
 import Link from "next/link"
 import { getAuth } from "firebase/auth"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
@@ -76,6 +76,9 @@ export default function CheckoutPage() {
     postalCode: "",
     country: "Bulgaria",
   })
+
+  // Promo code state
+  const [appliedPromoCode, setAppliedPromoCode] = useState<{ code: string; discount: number } | null>(null)
 
   // Redirect if not logged in or cart is empty
   useEffect(() => {
@@ -167,6 +170,20 @@ export default function CheckoutPage() {
     }
   }, [cartItems])
 
+  // Load promo code from localStorage
+  useEffect(() => {
+    const storedPromoCode = localStorage.getItem("appliedPromoCode")
+    if (storedPromoCode) {
+      try {
+        const promoData = JSON.parse(storedPromoCode)
+        setAppliedPromoCode(promoData)
+      } catch (error) {
+        console.error("Error parsing promo code:", error)
+        localStorage.removeItem("appliedPromoCode")
+      }
+    }
+  }, [])
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
     setFormData((prev) => ({
@@ -175,7 +192,7 @@ export default function CheckoutPage() {
     }))
   }
 
-  // Calculate order subtotal
+  // Calculate order subtotal (before discount)
   const calculateSubtotal = () => {
     if (directPurchaseItem) {
       const price =
@@ -191,6 +208,18 @@ export default function CheckoutPage() {
     }, 0)
   }
 
+  // Calculate discount amount
+  const getDiscountAmount = () => {
+    return appliedPromoCode ? appliedPromoCode.discount : 0
+  }
+
+  // Calculate subtotal after discount
+  const getDiscountedSubtotal = () => {
+    const subtotal = calculateSubtotal()
+    const discount = getDiscountAmount()
+    return Math.max(0, subtotal - discount)
+  }
+
   // Get selected shipping option
   const getSelectedShippingOption = () => {
     return shippingOptions.find((option) => option.id === selectedShipping) || shippingOptions[0]
@@ -198,9 +227,9 @@ export default function CheckoutPage() {
 
   // Calculate order total
   const calculateTotal = () => {
-    const subtotal = calculateSubtotal()
+    const discountedSubtotal = getDiscountedSubtotal()
     const shippingCost = getSelectedShippingOption().price
-    return subtotal + shippingCost
+    return discountedSubtotal + shippingCost
   }
 
   // Validate shipping form
@@ -297,6 +326,9 @@ export default function CheckoutPage() {
             status: "pending",
           },
           orderTotal: calculateTotal(),
+          subtotal: calculateSubtotal(),
+          discountAmount: getDiscountAmount(),
+          promoCode: appliedPromoCode,
           directPurchase: !!directPurchaseItem,
         }),
       })
@@ -372,6 +404,9 @@ export default function CheckoutPage() {
         if (!directPurchaseItem) {
           await clearGarage()
         }
+
+        // Clear promo code from localStorage
+        localStorage.removeItem("appliedPromoCode")
 
         // Close the modal and redirect to success page
         setTimeout(() => {
@@ -755,6 +790,21 @@ export default function CheckoutPage() {
                         </div>
                       </div>
 
+                      {appliedPromoCode && (
+                        <div>
+                          <h3 className="font-medium flex items-center mb-2">
+                            <Tag className="w-4 h-4 mr-2" />
+                            Промо код
+                          </h3>
+                          <div className="bg-gray-50 p-3 rounded">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium text-green-800">{appliedPromoCode.code}</span>
+                              <span className="text-green-600">-{appliedPromoCode.discount.toFixed(2)} лв.</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       <div>
                         <h3 className="font-medium flex items-center mb-2">
                           <CreditCard className="w-4 h-4 mr-2" />
@@ -845,6 +895,20 @@ export default function CheckoutPage() {
                     <span>Междинна сума:</span>
                     <span>{calculateSubtotal().toFixed(2)} лв.</span>
                   </div>
+
+                  {/* Show promo code discount if applied */}
+                  {appliedPromoCode && (
+                    <div className="flex justify-between text-green-600">
+                      <span>Отстъпка ({appliedPromoCode.code}):</span>
+                      <span>-{appliedPromoCode.discount.toFixed(2)} лв.</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between">
+                    <span>Сума след отстъпка:</span>
+                    <span>{getDiscountedSubtotal().toFixed(2)} лв.</span>
+                  </div>
+
                   <div className="flex justify-between">
                     <span>Доставка:</span>
                     <span>
