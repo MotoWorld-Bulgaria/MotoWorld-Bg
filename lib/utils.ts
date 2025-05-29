@@ -75,3 +75,8 @@ export const getPaymentStatusColor = (status: string) => {
   }
   return colorMap[status] || "bg-gray-100 text-gray-800 hover:bg-gray-200"
 }
+
+// Add this function to the existing utils.ts file
+export const formatCurrency = (amount: number) => {
+  return `${amount.toFixed(2)} лв.`
+}
