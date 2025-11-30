@@ -8,7 +8,6 @@ import type { Motorcycle } from "@/lib/types"
 import MotorcycleCard from "./motorcycle-card"
 import LoginModal from "./login-modal"
 import RegisterModal from "./register-modal"
-import Pagination from "./pagination"
 
 export default function MotorcycleSection() {
   const { user } = useAuth()
@@ -332,13 +331,39 @@ export default function MotorcycleSection() {
 
             {/* Pagination */}
             {filteredMotorcycles.length > 0 && (
-              <div className="flex justify-center mt-8">
-                <Pagination
-                  itemsPerPage={2}
-                  totalItems={filteredMotorcycles.length}
-                  currentPage={currentPage}
-                  paginate={paginate}
-                />
+              <div className="flex justify-center mt-8 gap-2">
+                <button
+                  onClick={() => paginate(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="px-4 py-2 border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                >
+                  Previous
+                </button>
+                
+                {Array.from(
+                  { length: Math.ceil(filteredMotorcycles.length / itemsPerPage) },
+                  (_, i) => i + 1
+                ).map((pageNumber) => (
+                  <button
+                    key={pageNumber}
+                    onClick={() => paginate(pageNumber)}
+                    className={`px-3 py-2 border rounded ${
+                      currentPage === pageNumber
+                        ? "bg-black text-white"
+                        : "hover:bg-gray-100"
+                    }`}
+                  >
+                    {pageNumber}
+                  </button>
+                ))}
+                
+                <button
+                  onClick={() => paginate(currentPage + 1)}
+                  disabled={currentPage === Math.ceil(filteredMotorcycles.length / itemsPerPage)}
+                  className="px-4 py-2 border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                >
+                  Next
+                </button>
               </div>
             )}
           </div>

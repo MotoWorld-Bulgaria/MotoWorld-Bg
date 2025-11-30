@@ -1,17 +1,61 @@
 import { NextResponse } from "next/server"
-import { adminDb } from "@/lib/firebase-admin"
+import { adminDb, initError } from "@/lib/firebase-admin"
 import { verifyAuthToken } from "@/lib/verify-auth"
 import { v4 as uuidv4 } from "uuid"
 
 export async function POST(request: Request) {
   try {
+    console.log("=== Create Order API ===")
+    console.log("Firebase Init Error:", initError?.message || "None")
+    console.log("Firestore initialized:", !!adminDb)
+    
+    // Check if Firebase Admin initialization had an error
+    if (initError) {
+      console.error("Firebase initialization failed:", initError.message)
+      return NextResponse.json(
+        { 
+          error: "Firebase initialization failed",
+          details: initError.message,
+          type: "ConfigurationError"
+        }, 
+        { status: 500 }
+      )
+    }
+
+    // Check if Firebase Admin is initialized
+    if (!adminDb) {
+      console.error("Firestore not initialized - adminDb is null")
+      return NextResponse.json(
+        { 
+          error: "Firebase not initialized",
+          details: "Firestore database is not available. Check server logs.",
+          type: "ConfigurationError"
+        }, 
+        { status: 500 }
+      )
+    }
+
     // Verify authentication
     const authHeader = request.headers.get("Authorization")
     if (!authHeader) {
+      console.error("No authorization header provided")
       return NextResponse.json({ error: "No authorization header" }, { status: 401 })
     }
 
-    const decodedToken = await verifyAuthToken(authHeader)
+    let decodedToken
+    try {
+      decodedToken = await verifyAuthToken(authHeader)
+      console.log("✓ Token verified for user:", decodedToken.uid)
+    } catch (tokenError) {
+      console.error("Token verification failed:", tokenError)
+      return NextResponse.json(
+        { 
+          error: "Authentication failed",
+          details: tokenError instanceof Error ? tokenError.message : String(tokenError)
+        }, 
+        { status: 401 }
+      )
+    }
 
     const {
       items,
@@ -25,8 +69,20 @@ export async function POST(request: Request) {
       directPurchase = false,
     } = await request.json()
 
+    if (!items || !userData || !shippingOption || !paymentDetails) {
+      console.error("Missing required fields:", { items: !!items, userData: !!userData, shippingOption: !!shippingOption, paymentDetails: !!paymentDetails })
+      return NextResponse.json(
+        { 
+          error: "Missing required fields",
+          details: "items, userData, shippingOption, and paymentDetails are required"
+        }, 
+        { status: 400 }
+      )
+    }
+
     // Verify user matches token
     if (decodedToken.uid !== userData.uid) {
+      console.error("User ID mismatch:", decodedToken.uid, "vs", userData.uid)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -116,22 +172,38 @@ export async function POST(request: Request) {
     }
 
     // Add order to Firestore
-    const orderRef = await adminDb.collection("orders").add(orderData)
+    let orderRef
+    try {
+      orderRef = await adminDb.collection("orders").add(orderData)
+      console.log("Order created successfully:", orderRef.id)
+    } catch (firestoreError) {
+      console.error("Firestore add failed:", firestoreError)
+      throw new Error(`Failed to add order to Firestore: ${firestoreError instanceof Error ? firestoreError.message : String(firestoreError)}`)
+    }
 
     // Check and update motorcycle inventory
-    for (const item of items) {
-      const motorcycleRef = adminDb.collection("motors").doc(item.id)
-      const motorcycleDoc = await motorcycleRef.get()
+    try {
+      for (const item of items) {
+        const motorcycleRef = adminDb.collection("motors").doc(item.id)
+        const motorcycleDoc = await motorcycleRef.get()
 
-      if (motorcycleDoc.exists) {
-        const currentInventory = motorcycleDoc.data()?.inventory || 10 // Default to 10 if not set
-        const newInventory = Math.max(0, currentInventory - item.quantity)
+        if (motorcycleDoc.exists) {
+          const currentInventory = motorcycleDoc.data()?.inventory || 10 // Default to 10 if not set
+          const newInventory = Math.max(0, currentInventory - item.quantity)
 
-        await motorcycleRef.update({
-          inventory: newInventory,
-          updatedAt: new Date().toISOString(),
-        })
+          await motorcycleRef.update({
+            inventory: newInventory,
+            updatedAt: new Date().toISOString(),
+          })
+          console.log(`Updated inventory for ${item.id}: ${currentInventory} -> ${newInventory}`)
+        } else {
+          console.warn(`Motorcycle ${item.id} not found in database`)
+        }
       }
+    } catch (inventoryError) {
+      console.error("Inventory update failed:", inventoryError)
+      // Don't fail the entire order if inventory update fails
+      console.warn("Continuing despite inventory update error")
     }
 
     return NextResponse.json({
@@ -141,6 +213,15 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error("Error creating order:", error)
-    return NextResponse.json({ error: "Failed to create order" }, { status: 500 })
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    
+    return NextResponse.json(
+      { 
+        error: "Failed to create order",
+        details: errorMessage,
+        type: error instanceof Error ? error.constructor.name : typeof error
+      }, 
+      { status: 500 }
+    )
   }
 }

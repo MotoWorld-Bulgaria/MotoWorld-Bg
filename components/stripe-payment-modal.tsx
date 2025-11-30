@@ -107,6 +107,7 @@ function CheckoutForm({
 
     if (!stripe || !elements) {
       // Stripe.js hasn't loaded yet
+      setErrorMessage("Stripe не је учитан. Молимо покушајте поново.")
       return
     }
 
@@ -124,9 +125,10 @@ function CheckoutForm({
       })
 
       if (error) {
-        setErrorMessage(error.message || "Възникна проблем при обработката на плащането.")
+        const errorMsg = error.message || "Възникна проблем при обработката на плащането."
+        setErrorMessage(errorMsg)
         setPaymentStatus("error")
-        onPaymentError(error.message || "Payment failed")
+        onPaymentError(errorMsg)
       } else if (paymentIntent && paymentIntent.status === "succeeded") {
         setPaymentStatus("success")
         onPaymentSuccess(paymentIntent.id)
@@ -141,9 +143,20 @@ function CheckoutForm({
         onPaymentError("Payment is pending or requires additional steps")
       }
     } catch (err: any) {
+      console.error("Payment submission error:", err)
       setPaymentStatus("error")
-      setErrorMessage(err.message || "Възникна неочаквана грешка.")
-      onPaymentError(err.message || "Unexpected error")
+      
+      let errorMsg = "Възникна неочаквана грешка."
+      if (err instanceof Error) {
+        errorMsg = err.message
+      } else if (typeof err === "string") {
+        errorMsg = err
+      } else if (err && typeof err === "object") {
+        errorMsg = err.message || JSON.stringify(err)
+      }
+      
+      setErrorMessage(errorMsg)
+      onPaymentError(errorMsg)
     } finally {
       setIsProcessing(false)
     }

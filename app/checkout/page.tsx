@@ -291,21 +291,70 @@ export default function CheckoutPage() {
   }
 
   // Create order and initiate payment
-  const handleCheckout = async () => {
-    if (!user || inventoryError) return
+  const handleCheckout = async (e?: React.MouseEvent<HTMLButtonElement>) => {
+    if (e) {
+      e.preventDefault()
+    }
+    
+    if (!user || inventoryError) {
+      console.warn("Checkout blocked: user exists?", !!user, "inventory error?", inventoryError)
+      return
+    }
 
     setProcessingPayment(true)
 
     try {
       const auth = getAuth()
-      const user = auth.currentUser
+      const currentUser = auth.currentUser
 
-      if (!user) throw new Error("User not authenticated")
+      if (!currentUser) throw new Error("User not authenticated")
 
-      const idToken = await user.getIdToken()
+      const idToken = await currentUser.getIdToken()
 
       // Prepare items array - either direct purchase item or cart items
       const itemsToOrder = directPurchaseItem ? [directPurchaseItem] : cartItems
+
+      // Helper to read response body safely (JSON or plain text)
+      const readResponse = async (res: Response) => {
+        const text = await res.text()
+        if (!text) return null
+        try {
+          return JSON.parse(text)
+        } catch {
+          return text
+        }
+      }
+
+      // Build payload (keep small preview for logs)
+      const payload = {
+        items: itemsToOrder,
+        userData: {
+          ...formData,
+          uid: currentUser.uid,
+        },
+        shippingOption: getSelectedShippingOption(),
+        paymentDetails: {
+          method: "stripe",
+          status: "pending",
+        },
+        orderTotal: calculateTotal(),
+        subtotal: calculateSubtotal(),
+        discountAmount: getDiscountAmount(),
+        promoCode: appliedPromoCode,
+        directPurchase: !!directPurchaseItem,
+      }
+
+      // Log request preview (no secrets)
+      console.info("Creating order:", {
+        url: "/api/create-order",
+        method: "POST",
+        payloadPreview: {
+          itemsCount: itemsToOrder.length,
+          subtotal: payload.subtotal,
+          orderTotal: payload.orderTotal,
+          directPurchase: payload.directPurchase,
+        },
+      })
 
       // First create the order in Firebase
       const orderResponse = await fetch("/api/create-order", {
@@ -314,31 +363,47 @@ export default function CheckoutPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${idToken}`,
         },
-        body: JSON.stringify({
-          items: itemsToOrder,
-          userData: {
-            ...formData,
-            uid: user.uid,
-          },
-          shippingOption: getSelectedShippingOption(),
-          paymentDetails: {
-            method: "stripe",
-            status: "pending",
-          },
-          orderTotal: calculateTotal(),
-          subtotal: calculateSubtotal(),
-          discountAmount: getDiscountAmount(),
-          promoCode: appliedPromoCode,
-          directPurchase: !!directPurchaseItem,
-        }),
+        body: JSON.stringify(payload),
       })
 
-      const orderResult = await orderResponse.json()
-      if (orderResult.error) throw new Error(orderResult.error)
+      const orderResult = await readResponse(orderResponse)
+
+      if (!orderResponse.ok) {
+        // Build a compact debug string for toast/logs
+        const bodyPreview =
+          orderResult == null
+            ? "<empty body>"
+            : typeof orderResult === "string"
+            ? orderResult.slice(0, 500)
+            : JSON.stringify(orderResult).slice(0, 500)
+
+        console.error(
+          "Order API error:",
+          orderResponse.status,
+          orderResponse.statusText,
+          orderResponse.url,
+          "bodyPreview:",
+          bodyPreview
+        )
+
+        // Show the server status and small body preview to the user (friendly)
+        toast({
+          title: `Грешка при създаване на поръчка (${orderResponse.status})`,
+          description: bodyPreview.length > 0 ? bodyPreview : orderResponse.statusText,
+          variant: "destructive",
+        })
+
+        throw new Error(`Order API returned ${orderResponse.status} ${orderResponse.statusText}`)
+      }
+
+      if (!orderResult || !orderResult.orderId) {
+        console.error("Invalid order response:", orderResult, "url:", orderResponse.url)
+        throw new Error("Invalid order response from server")
+      }
 
       // Store the order ID for later use
       setOrderId(orderResult.orderId)
-      setOrderNumber(orderResult.orderNumber)
+      setOrderNumber(orderResult.orderNumber || "")
 
       // Create a payment intent
       const paymentIntentResponse = await fetch("/api/create-payment-intent", {
@@ -353,20 +418,59 @@ export default function CheckoutPage() {
         }),
       })
 
-      const paymentIntentResult = await paymentIntentResponse.json()
+      const paymentIntentResult = await readResponse(paymentIntentResponse)
 
-      if (paymentIntentResult.error) {
-        throw new Error(paymentIntentResult.error)
+      if (!paymentIntentResponse.ok) {
+        const bodyPreview =
+          paymentIntentResult == null
+            ? "<empty body>"
+            : typeof paymentIntentResult === "string"
+            ? paymentIntentResult.slice(0, 500)
+            : JSON.stringify(paymentIntentResult).slice(0, 500)
+
+        console.error(
+          "Payment Intent API error:",
+          paymentIntentResponse.status,
+          paymentIntentResponse.statusText,
+          paymentIntentResponse.url,
+          "bodyPreview:",
+          bodyPreview
+        )
+
+        toast({
+          title: `Грешка при иницииране на плащане (${paymentIntentResponse.status})`,
+          description: bodyPreview.length > 0 ? bodyPreview : paymentIntentResponse.statusText,
+          variant: "destructive",
+        })
+
+        throw new Error(`Payment Intent API returned ${paymentIntentResponse.status} ${paymentIntentResponse.statusText}`)
+      }
+
+      if (!paymentIntentResult || !paymentIntentResult.clientSecret) {
+        console.error("Invalid payment intent response:", paymentIntentResult)
+        throw new Error("Invalid payment intent response from server")
       }
 
       // Set the client secret and open the payment modal
       setClientSecret(paymentIntentResult.clientSecret)
       setIsPaymentModalOpen(true)
-    } catch (error) {
-      console.error("Error processing checkout:", error)
+    } catch (error: any) {
+      console.error("Error processing checkout:", error, "Stack:", error?.stack)
+      
+      // Handle different error types
+      let errorMessage = "Възникна проблем при създаването на поръчката. Моля, опитайте отново."
+      
+      if (error instanceof Error) {
+        errorMessage = error.message
+      } else if (typeof error === "string") {
+        errorMessage = error
+      } else if (error && typeof error === "object") {
+        errorMessage = error.message || JSON.stringify(error)
+      }
+      
       toast({
         title: "Грешка при обработката",
-        description: "Възникна проблем при създаването на поръчката. Моля, опитайте отново.",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
@@ -376,13 +480,32 @@ export default function CheckoutPage() {
 
   // Handle successful payment
   const handlePaymentSuccess = async (paymentIntentId: string) => {
+    if (!paymentIntentId) {
+      console.error("handlePaymentSuccess called without paymentIntentId")
+      toast({
+        title: "Грешка",
+        description: "Невалиден ID на плащането",
+        variant: "destructive",
+      })
+      return
+    }
+    
     try {
       const auth = getAuth()
-      const user = auth.currentUser
+      const currentUser = auth.currentUser
 
-      if (!user) throw new Error("User not authenticated")
+      if (!currentUser) throw new Error("User not authenticated")
 
-      const idToken = await user.getIdToken()
+      const idToken = await currentUser.getIdToken()
+
+      const readResponse = async (res: Response) => {
+        const text = await res.text()
+        try {
+          return text ? JSON.parse(text) : null
+        } catch {
+          return text
+        }
+      }
 
       // Update the order with payment success
       const updateResponse = await fetch("/api/update-payment-status", {
@@ -397,7 +520,15 @@ export default function CheckoutPage() {
         }),
       })
 
-      const updateResult = await updateResponse.json()
+      const updateResult = await readResponse(updateResponse)
+
+      if (!updateResponse.ok) {
+        console.error("Update payment API error:", updateResponse.status, updateResult)
+        const errMsg =
+          (updateResult && (updateResult.message || updateResult.error)) ||
+          `Update payment API returned status ${updateResponse.status}`
+        throw new Error(errMsg)
+      }
 
       if (updateResult.success) {
         // Clear the cart if not a direct purchase
@@ -414,13 +545,25 @@ export default function CheckoutPage() {
           router.push(`/order-success?order_id=${orderId}`)
         }, 2000)
       } else {
+        console.error("Update payment returned failure:", updateResult)
         throw new Error(updateResult.message || "Failed to update payment status")
       }
-    } catch (error) {
-      console.error("Error handling payment success:", error)
+    } catch (error: any) {
+      console.error("Error handling payment success:", error, "Stack:", error?.stack)
+      
+      let errorMessage = "Плащането е успешно, но възникна проблем при обновяването на поръчката."
+      
+      if (error instanceof Error) {
+        errorMessage = error.message
+      } else if (typeof error === "string") {
+        errorMessage = error
+      } else if (error && typeof error === "object") {
+        errorMessage = error.message || JSON.stringify(error)
+      }
+      
       toast({
         title: "Грешка при обработката",
-        description: "Плащането е успешно, но възникна проблем при обновяването на поръчката.",
+        description: errorMessage,
         variant: "destructive",
       })
     }
@@ -428,10 +571,11 @@ export default function CheckoutPage() {
 
   // Handle payment error
   const handlePaymentError = (error: string) => {
-    console.error("Payment error:", error)
+    const errorMessage = typeof error === "string" ? error : String(error)
+    console.error("Payment error:", errorMessage)
     toast({
       title: "Грешка при плащането",
-      description: "Възникна проблем при обработката на плащането. Моля, опитайте отново.",
+      description: errorMessage || "Възникна проблем при обработката на плащането. Моля, опитайте отново.",
       variant: "destructive",
     })
   }
